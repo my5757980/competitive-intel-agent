@@ -1,0 +1,426 @@
+openapi: 3.1.0
+info:
+  title: CompeteIQ GTM Intelligence API
+  version: 1.0.0
+  description: >
+    AI-powered competitive intelligence platform using Bright Data infrastructure.
+    Provides competitor monitoring, market search, lead enrichment, and full intelligence reports.
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+  - url: https://competeiq-api.railway.app
+    description: Production (Railway)
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: health_check
+      responses:
+        "200":
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  bright_data_configured:
+                    type: boolean
+
+  /monitor:
+    post:
+      summary: Monitor competitor website
+      operationId: monitor_competitor
+      description: >
+        Scrapes a competitor URL or resolves a company name to their website,
+        then extracts structured intelligence using Bright Data Web Unlocker.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MonitorRequest"
+      responses:
+        "200":
+          description: Competitor intelligence extracted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompetitorIntelligence"
+        "400":
+          description: Invalid target URL or company name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Bright Data Web Unlocker unavailable or rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /search:
+    post:
+      summary: Search market intelligence
+      operationId: search_market
+      description: >
+        Searches for market signals using Bright Data SERP API.
+        Returns structured search results from Google.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SearchRequest"
+      responses:
+        "200":
+          description: Search results returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"
+        "400":
+          description: Invalid search query
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Bright Data SERP API unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /enrich:
+    post:
+      summary: Enrich lead company profile
+      operationId: enrich_company
+      description: >
+        Fetches structured company profile data using Bright Data Web Scraper API.
+        Returns company size, industry, news, and tech signals.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnrichRequest"
+      responses:
+        "200":
+          description: Company profile returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanyProfile"
+        "400":
+          description: Invalid company name or URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Bright Data Web Scraper API unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /report:
+    post:
+      summary: Generate full intelligence report
+      operationId: generate_report
+      description: >
+        Runs all three intelligence modules and synthesizes results into
+        a comprehensive competitive intelligence report using CrewAI agents.
+        Returns complete JSON report.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportRequest"
+      responses:
+        "200":
+          description: Intelligence report generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntelligenceReport"
+        "400":
+          description: Invalid competitor name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /report/stream:
+    post:
+      summary: Generate report with SSE progress stream
+      operationId: generate_report_stream
+      description: >
+        Same as /report but streams progress events via Server-Sent Events
+        before delivering the final report as the last event.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportRequest"
+      responses:
+        "200":
+          description: SSE stream of progress events + final report
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: >
+                  Stream of JSON events. Each event has data field with ProgressEvent JSON.
+                  Final event has event: "report" with IntelligenceReport JSON.
+
+components:
+  schemas:
+    MonitorRequest:
+      type: object
+      required: [target]
+      properties:
+        target:
+          type: string
+          description: Competitor URL or company name
+          example: "salesforce.com/pricing"
+        focus:
+          type: array
+          items:
+            type: string
+            enum: [pricing, features, jobs]
+          default: [pricing, features, jobs]
+        country:
+          type: string
+          default: us
+
+    SearchRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          minLength: 3
+          example: "Salesforce new product launch 2026"
+        num_results:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 10
+        date_filter:
+          type: string
+          nullable: true
+          enum: [past_week, past_month, null]
+
+    EnrichRequest:
+      type: object
+      required: [company]
+      properties:
+        company:
+          type: string
+          minLength: 2
+          example: "Stripe"
+
+    ReportRequest:
+      type: object
+      required: [competitor]
+      properties:
+        competitor:
+          type: string
+          minLength: 2
+          example: "HubSpot"
+        include_sections:
+          type: array
+          items:
+            type: string
+          default: [overview, pricing, market, hiring, recommendations]
+
+    PricingTier:
+      type: object
+      properties:
+        name:
+          type: string
+        price:
+          type: string
+          nullable: true
+        features:
+          type: array
+          items:
+            type: string
+
+    CompetitorIntelligence:
+      type: object
+      properties:
+        target_url:
+          type: string
+        company_name:
+          type: string
+          nullable: true
+        pricing_tiers:
+          type: array
+          items:
+            $ref: "#/components/schemas/PricingTier"
+        product_claims:
+          type: array
+          items:
+            type: string
+        job_count:
+          type: integer
+          nullable: true
+        job_titles:
+          type: array
+          items:
+            type: string
+        page_summary:
+          type: string
+        raw_signals:
+          type: array
+          items:
+            type: string
+        collected_at:
+          type: string
+          format: date-time
+        data_source:
+          type: string
+
+    SearchResult:
+      type: object
+      properties:
+        title:
+          type: string
+        url:
+          type: string
+        snippet:
+          type: string
+        source_date:
+          type: string
+          nullable: true
+        relevance_signal:
+          type: string
+          nullable: true
+
+    SearchResponse:
+      type: object
+      properties:
+        query:
+          type: string
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchResult"
+        total_results:
+          type: integer
+        collected_at:
+          type: string
+          format: date-time
+        data_source:
+          type: string
+
+    CompanyProfile:
+      type: object
+      properties:
+        name:
+          type: string
+        industry:
+          type: string
+          nullable: true
+        size_range:
+          type: string
+          nullable: true
+        headquarters:
+          type: string
+          nullable: true
+        website:
+          type: string
+          nullable: true
+        recent_news:
+          type: array
+          items:
+            type: string
+        tech_signals:
+          type: array
+          items:
+            type: string
+        linkedin_followers:
+          type: integer
+          nullable: true
+        collected_at:
+          type: string
+          format: date-time
+        data_source:
+          type: string
+
+    ReportSection:
+      type: object
+      properties:
+        title:
+          type: string
+        content:
+          type: string
+        confidence:
+          type: string
+          enum: [high, medium, low]
+        sources:
+          type: array
+          items:
+            type: string
+
+    IntelligenceReport:
+      type: object
+      properties:
+        competitor:
+          type: string
+        sections:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReportSection"
+        executive_summary:
+          type: string
+        recommended_actions:
+          type: array
+          items:
+            type: string
+        data_completeness:
+          type: number
+          minimum: 0
+          maximum: 1
+        generated_at:
+          type: string
+          format: date-time
+        generation_time_seconds:
+          type: number
+
+    ProgressEvent:
+      type: object
+      properties:
+        agent:
+          type: string
+          enum: [CompetitorMonitor, MarketResearcher, LeadEnricher, IntelligenceReporter]
+        status:
+          type: string
+          enum: [starting, running, complete, failed]
+        message:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        detail:
+          type: string
+          nullable: true
+        source:
+          type: string
+          nullable: true
