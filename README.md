@@ -21,7 +21,7 @@ CompeteIQ uses **4 CrewAI agents** backed by **Bright Data's infrastructure** to
 ### Step 1 — Clone & Configure
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/competitive-intel-agent
+git clone https://github.com/my5757980/competitive-intel-agent
 cd competitive-intel-agent
 cp .env.example .env
 ```
@@ -105,4 +105,3 @@ npm run dev
 cd backend
 pytest tests/ -v
 ```
-"# competitive-intel-agent" 
