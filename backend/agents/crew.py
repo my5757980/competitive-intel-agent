@@ -1,3 +1,4 @@
+"""Runs the four agents as one sequential pipeline in plain async Python (no agent framework), streaming progress."""
 import asyncio
 import json
 import time

@@ -7,14 +7,14 @@
 
 ## What It Does
 
-CompeteIQ uses **4 CrewAI agents** backed by **Bright Data's infrastructure** to give GTM teams real-time competitive intelligence:
+CompeteIQ runs a **4-step agent pipeline** backed by **Bright Data's infrastructure** to give GTM teams real-time competitive intelligence. Each step (CompetitorMonitor → MarketResearcher → LeadEnricher → IntelligenceReporter) pulls one kind of live web data, and Groq llama-3.3-70b turns it into analysis:
 
 | Feature | Bright Data Tool | What You Get |
 |---------|-----------------|--------------|
 | 🔍 Competitor Monitor | Web Unlocker | Pricing, features, job postings from any competitor site |
 | 🌐 Market Search | SERP API | Live market signals — launches, news, funding |
 | 🏢 Lead Enrichment | Web Scraper API | Company profile: size, industry, tech stack, news |
-| 📊 Intelligence Report | All 3 + CrewAI | Full AI-synthesized competitive report with live progress |
+| 📊 Intelligence Report | All 3 + Groq llama-3.3-70b | Full AI-synthesized competitive report with live progress |
 
 ## Quick Start (3 steps)
 
@@ -47,33 +47,36 @@ docker compose up
 
 ## Architecture
 
+The dashboard calls its own Next.js API routes (`frontend/app/api/*`), which run the pipeline in
+TypeScript; that is what Vercel serves. `backend/` holds the original FastAPI version of the same
+pipeline, which `docker compose up` starts on port 8000 with API docs at `/docs`.
+
 ```
 Next.js 15 Dashboard (port 3000)
-         ↕ REST API
-FastAPI Backend (port 8000)
-         ↕ CrewAI Agents
+         ↕ REST + SSE
+Next.js API routes (/api)          — FastAPI (port 8000) runs the same steps
+         ↕ one sequential pipeline, plain async code (no agent framework)
 ┌─────────────────────────────────┐
-│ CompetitorMonitorAgent          │ → Bright Data Web Unlocker
-│ MarketResearchAgent             │ → Bright Data SERP API
-│ LeadEnricherAgent               │ → Bright Data Web Scraper API
-│ IntelligenceReporterAgent       │ → Groq / GPT-4o
+│ CompetitorMonitor               │ → Bright Data Web Unlocker
+│ MarketResearcher                │ → Bright Data SERP API
+│ LeadEnricher                    │ → Bright Data Web Scraper API
+│ IntelligenceReporter            │ → Groq llama-3.3-70b
 └─────────────────────────────────┘
 ```
 
 ## Tech Stack
 
-- **Backend**: Python 3.12 + FastAPI + CrewAI 0.80
+- **Pipeline**: Next.js API routes (TypeScript) in production; the same pipeline in Python 3.12 + FastAPI under `backend/`
 - **Frontend**: Next.js 15 + TypeScript + Tailwind CSS
-- **AI**: Groq llama-3.3-70b (primary) / GPT-4o (fallback)
+- **AI**: Groq llama-3.3-70b
 - **Bright Data**: Web Unlocker, SERP API, Web Scraper API
-- **Deploy**: Railway (backend) + Vercel (frontend)
+- **Deploy**: Vercel (dashboard + API routes)
 
 ## Bright Data Tools Used
 
 - **Web Unlocker** — bypasses bot detection on competitor websites
 - **SERP API** — real-time Google search results in structured JSON
 - **Web Scraper API** — structured company data from LinkedIn and web
-- **MCP Server** — AI agent ↔ live web connectivity layer
 
 ## Hackathon Submission Checklist
 
@@ -82,7 +85,7 @@ FastAPI Backend (port 8000)
 - [x] Track 1: GTM Intelligence
 - [x] Demo application
 - [ ] Video presentation
-- [ ] Deploy URL (Railway + Vercel)
+- [ ] Deploy URL (Vercel)
 
 ## Local Development (without Docker)
 

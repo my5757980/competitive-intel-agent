@@ -8,9 +8,7 @@ info:
 
 servers:
   - url: http://localhost:8000
-    description: Local development
-  - url: https://competeiq-api.railway.app
-    description: Production (Railway)
+    description: Local development (FastAPI backend; never deployed — production runs the Next.js API routes on Vercel)
 
 paths:
   /health:
@@ -136,7 +134,7 @@ paths:
       operationId: generate_report
       description: >
         Runs all three intelligence modules and synthesizes results into
-        a comprehensive competitive intelligence report using CrewAI agents.
+        a comprehensive competitive intelligence report with Groq llama-3.3-70b.
         Returns complete JSON report.
       requestBody:
         required: true

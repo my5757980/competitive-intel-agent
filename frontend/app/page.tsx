@@ -29,8 +29,8 @@ const features = [
     href: "/report",
     icon: "📊",
     title: "Intelligence Report",
-    description: "Full competitive intelligence report synthesized by 4 CrewAI agents with live progress streaming.",
-    badge: "All Tools + CrewAI",
+    description: "Full competitive intelligence report from a 4-step agent pipeline, synthesized by Groq llama-3.3-70b with live progress streaming.",
+    badge: "All Tools + Groq",
     color: "from-amber-500/20 to-amber-600/10 border-amber-500/30",
   },
 ];
