@@ -1,4 +1,5 @@
-const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL ?? "/api";
+// Empty or unset: the dashboard's own Next.js API routes. Set at build time to use the FastAPI backend.
+const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/api";
 
 async function post<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${BACKEND}${path}`, {

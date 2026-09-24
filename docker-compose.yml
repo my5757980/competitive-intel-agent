@@ -19,12 +19,15 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        # Next.js writes NEXT_PUBLIC_* values into the browser bundle at build time, so this has to be
+        # a build argument; as a runtime variable it never reached the dashboard. The browser then
+        # calls the FastAPI service on the host's port 8000.
+        NEXT_PUBLIC_BACKEND_URL: http://localhost:8000
     ports:
       - "3000:3000"
     env_file:
       - .env
-    environment:
-      - NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
     depends_on:
       - backend
     restart: unless-stopped

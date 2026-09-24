@@ -1,7 +1,17 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: [TEMPLATE] → 1.0.0
+Version change: 1.0.0 → 2.0.0 (2026-09-24)
+Modified principles:
+  - I. Bright Data Integration: a fallback fetch is allowed when Bright Data is unavailable, but it must
+    be labelled as what it is (data_source). The code has always had these fallbacks.
+  - II. AI-First Architecture → II. Plain Sequential Pipeline: the four steps run as plain async code.
+    CrewAI was planned but never imported; the code is the source of truth.
+Tech Stack & Deployment: matches what runs (no CrewAI, no GPT-4o, no MCP server, no Railway).
+Rationale: the code had drifted from 1.0.0 and the docs were made honest on 2026-09-24; the
+constitution now says the same thing as the code, the README and the openapi description.
+
+Previous version change: [TEMPLATE] → 1.0.0
 Modified principles: N/A (initial population from template)
 Added sections:
   - I. Bright Data Integration (REQUIRED)
@@ -28,18 +38,22 @@ Deferred TODOs: none
 
 Every data-collection feature MUST demonstrably use at least one Bright Data product.
 Permitted tools: MCP Server, Web Unlocker, SERP API, Web Scraper API, Scraping Browser, Proxies.
-Direct HTTP scraping without Bright Data proxy/unlocker is FORBIDDEN.
+When Bright Data is not configured or refuses a call, a step MAY fall back (a direct fetch, DuckDuckGo)
+so the demo still runs, but every response MUST name the source that really served it (`data_source`).
+A fallback MUST never be presented as Bright Data.
 All Bright Data credentials MUST come from environment variables — never hardcoded.
 **Rationale**: Hackathon rule — submissions without Bright Data usage are disqualified.
 
-### II. AI-First Architecture
+### II. Plain Sequential Pipeline
 
-The system MUST use CrewAI multi-agent framework for all intelligence tasks.
-Four specialized agents are required: Competitor Monitor, Market Researcher, Lead Enricher, Intelligence Reporter.
-Each agent MUST have a clearly defined role, goal, backstory, and tool list.
-Agent results MUST be structured Pydantic models — no raw string returns.
-LLM provider MUST be configurable via env var (OPENAI_API_KEY or GROQ_API_KEY).
-**Rationale**: Judges evaluate AI integration quality — single-agent or LLM-only calls score lower.
+Four steps — Competitor Monitor, Market Researcher, Lead Enricher, Intelligence Reporter — run as one
+sequential pipeline in plain async code, with no agent framework, in both the FastAPI backend and the
+Next.js API routes.
+Each step MUST have one clear job and return a structured result (Pydantic models in Python, typed
+objects in TypeScript) — no raw string returns.
+The LLM is Groq llama-3.3-70b, configured with GROQ_API_KEY.
+**Rationale**: a plain pipeline is easy to test and to read. Version 1.0.0 required CrewAI, but it was
+never used; this principle describes the code as it is.
 
 ### III. Type Safety & Async
 
@@ -74,13 +88,12 @@ In-memory caching (Python dict / LRU cache) is acceptable for repeated queries.
 
 ## Tech Stack & Deployment
 
-**Backend**: Python 3.12 + FastAPI + CrewAI + httpx
+**Backend**: Python 3.12 + FastAPI + httpx (the Next.js API routes run the same pipeline in TypeScript)
 **Frontend**: Next.js 15 (App Router) + TypeScript + Tailwind CSS
-**AI Providers**: OpenAI GPT-4o (primary) or Groq llama-3.3-70b (fallback)
-**Bright Data Tools**: MCP Server, Web Unlocker, SERP API, Web Scraper API
+**AI Provider**: Groq llama-3.3-70b
+**Bright Data Tools**: Web Unlocker, SERP API, Web Scraper API
 **Containerization**: Docker + Docker Compose (multi-service)
-**Deploy — Backend**: Railway
-**Deploy — Frontend**: Vercel
+**Deploy**: Vercel (dashboard + API routes)
 **Testing**: pytest (backend unit tests only — no heavy test suite)
 **Package Manager**: uv (Python), npm (Node)
 
@@ -101,4 +114,4 @@ Amendments require: (a) clear rationale, (b) version bump, (c) update to LAST_AM
 Version policy: MAJOR = principle removal/redefinition | MINOR = new principle/section | PATCH = wording fix.
 Constitution supersedes any conflicting guidance in README or inline comments.
 
-**Version**: 1.0.0 | **Ratified**: 2026-05-23 | **Last Amended**: 2026-05-23
+**Version**: 2.0.0 | **Ratified**: 2026-05-23 | **Last Amended**: 2026-09-24
