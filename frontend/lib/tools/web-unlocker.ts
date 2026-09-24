@@ -1,15 +1,20 @@
+import { BRIGHT_DATA_WEB_UNLOCKER, DIRECT_FETCH } from './sources';
+
 const BRIGHT_DATA_API_KEY = process.env.BRIGHT_DATA_API_KEY ?? '';
 const TIMEOUT_MS = 30_000;
 
-export async function scrapeWithUnlocker(url: string, country = 'us'): Promise<string> {
+// source says which path really served the page: Bright Data, or the direct fallback fetch.
+export interface ScrapedPage { html: string; source: string; }
+
+export async function scrapeWithUnlocker(url: string, country = 'us'): Promise<ScrapedPage> {
   if (BRIGHT_DATA_API_KEY) {
     try {
-      return await scrapeViaApi(url, country);
+      return { html: await scrapeViaApi(url, country), source: BRIGHT_DATA_WEB_UNLOCKER };
     } catch {
-      return await scrapeDirect(url);
+      return { html: await scrapeDirect(url), source: DIRECT_FETCH };
     }
   }
-  return await scrapeDirect(url);
+  return { html: await scrapeDirect(url), source: DIRECT_FETCH };
 }
 
 async function scrapeViaApi(url: string, country: string): Promise<string> {

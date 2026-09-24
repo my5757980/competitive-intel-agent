@@ -13,8 +13,9 @@ async def test_scrape_returns_html_on_200():
          patch("tools.web_unlocker.BRIGHT_DATA_PROXY_URL", ""), \
          patch("httpx.AsyncClient.post", return_value=mock_resp):
         from tools.web_unlocker import scrape_with_unlocker
-        result = await scrape_with_unlocker("https://example.com")
-        assert "<html>" in result
+        html, source = await scrape_with_unlocker("https://example.com")
+        assert "<html>" in html
+        assert source == "bright_data_web_unlocker"
 
 
 @pytest.mark.asyncio

@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     const { target, country = 'us', focus = ['pricing', 'product', 'hiring'] } = await req.json();
     if (!target) return NextResponse.json({ error: 'target is required' }, { status: 422 });
 
-    const html = await scrapeWithUnlocker(target, country);
+    const { html, source } = await scrapeWithUnlocker(target, country);
     const extracted = extractCompetitorIntelligence(html, target);
 
     const prompt = `Analyze this competitor website data from ${target}.
@@ -47,7 +47,7 @@ Write a 2-3 sentence strategic summary of what this tells us about the competito
       page_summary: summary,
       raw_signals: extracted.raw_signals,
       collected_at: new Date().toISOString(),
-      data_source: 'bright_data_web_unlocker',
+      data_source: source,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

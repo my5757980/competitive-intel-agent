@@ -25,8 +25,9 @@ async def test_search_returns_list_of_dicts():
             mock_client_class.return_value = mock_client
 
             from tools.serp_api import search_serp
-            results = await search_serp("Stripe new features")
+            results, source = await search_serp("Stripe new features")
 
+    assert source == "bright_data_serp_api"
     assert isinstance(results, list)
     assert len(results) == 2
     assert results[0]["title"] == "Stripe launches new AI features"
@@ -49,6 +50,7 @@ async def test_search_returns_empty_list_for_no_results():
             mock_client_class.return_value = mock_client
 
             from tools.serp_api import search_serp
-            results = await search_serp("xyznonexistenttopic123")
+            results, source = await search_serp("xyznonexistenttopic123")
 
     assert results == []
+    assert source == "bright_data_serp_api"

@@ -14,7 +14,7 @@ def _groq_client():
 
 
 async def run_competitor_monitor(req: MonitorRequest) -> CompetitorIntelligence:
-    html = await scrape_with_unlocker(req.target, req.country)
+    html, source = await scrape_with_unlocker(req.target, req.country)
     extracted = extract_competitor_intelligence(html, req.target)
 
     prompt = f"""Analyze this competitor website data from {req.target}.
@@ -50,6 +50,7 @@ Write a 2-3 sentence strategic summary of what this tells us about the competito
         page_summary=summary,
         raw_signals=extracted["raw_signals"],
         collected_at=datetime.now(timezone.utc),
+        data_source=source,
     )
 
 

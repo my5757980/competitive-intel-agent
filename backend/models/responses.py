@@ -19,7 +19,7 @@ class CompetitorIntelligence(BaseModel):
     page_summary: str = ""
     raw_signals: list[str] = []
     collected_at: datetime
-    data_source: str = "bright_data_web_unlocker"
+    data_source: str  # which service really served it; see tools/sources.py
 
 
 class SearchResult(BaseModel):
@@ -35,7 +35,7 @@ class SearchResponse(BaseModel):
     results: list[SearchResult] = []
     total_results: int = 0
     collected_at: datetime
-    data_source: str = "bright_data_serp_api"
+    data_source: str  # which service really served it; see tools/sources.py
 
 
 class CompanyProfile(BaseModel):
@@ -48,7 +48,7 @@ class CompanyProfile(BaseModel):
     tech_signals: list[str] = []
     linkedin_followers: int | None = None
     collected_at: datetime
-    data_source: str = "bright_data_web_scraper_api"
+    data_source: str  # which service really served it; see tools/sources.py
 
 
 class ReportSection(BaseModel):

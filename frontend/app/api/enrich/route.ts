@@ -10,10 +10,10 @@ export async function POST(req: NextRequest) {
 
     const raw = await enrichCompany(company);
 
+    // raw.data_source already names the service that really answered.
     return NextResponse.json({
       ...raw,
       collected_at: new Date().toISOString(),
-      data_source: 'bright_data_web_scraper_api',
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

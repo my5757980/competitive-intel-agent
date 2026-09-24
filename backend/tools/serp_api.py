@@ -1,13 +1,17 @@
 import httpx
 import os
 
+from tools.sources import BRIGHT_DATA_SERP_API, DUCKDUCKGO
+
 BRIGHT_DATA_API_KEY = os.getenv("BRIGHT_DATA_API_KEY", "")
 SERP_BASE = "https://api.brightdata.com/serp/google"
 TIMEOUT = 20.0
 
 
-async def search_serp(query: str, num_results: int = 10, date_filter: str | None = None) -> list[dict]:
-    """Search via Bright Data SERP API. Falls back to DuckDuckGo if zone not configured."""
+async def search_serp(query: str, num_results: int = 10, date_filter: str | None = None) -> tuple[list[dict], str]:
+    """Search via Bright Data SERP API. Falls back to DuckDuckGo if zone not configured.
+
+    Returns (results, source); source says which of the two really answered."""
     params: dict = {"q": query, "num": num_results, "brd_json": "1"}
     if date_filter == "past_week":
         params["tbs"] = "qdr:w"
@@ -23,11 +27,11 @@ async def search_serp(query: str, num_results: int = 10, date_filter: str | None
                     headers={"Authorization": f"Bearer {BRIGHT_DATA_API_KEY}"},
                 )
                 resp.raise_for_status()
-                return _parse_serp_response(resp.json())
+                return _parse_serp_response(resp.json()), BRIGHT_DATA_SERP_API
         except (httpx.HTTPStatusError, Exception):
             pass  # Fall through to DuckDuckGo fallback
 
-    return await _search_duckduckgo(query, num_results)
+    return await _search_duckduckgo(query, num_results), DUCKDUCKGO
 
 
 async def _search_duckduckgo(query: str, num_results: int) -> list[dict]:

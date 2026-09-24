@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 
+from tools.sources import NO_DATA
 from tools.web_scraper_api import enrich_company
 from models.requests import EnrichRequest
 from models.responses import CompanyProfile
@@ -18,4 +19,5 @@ async def run_lead_enricher(req: EnrichRequest) -> CompanyProfile:
         tech_signals=raw.get("tech_signals", []),
         linkedin_followers=raw.get("linkedin_followers"),
         collected_at=datetime.now(timezone.utc),
+        data_source=raw.get("data_source", NO_DATA),
     )

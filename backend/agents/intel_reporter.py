@@ -1,5 +1,8 @@
+import json
+
 from config import get_settings
 from groq import Groq
+from tools.sources import label
 
 
 def get_groq_client():
@@ -12,22 +15,23 @@ def build_reporter_prompt(
     search_data: dict,
     enrich_data: dict,
     sections: list[str],
+    sources_used: list[str],
 ) -> str:
     return f"""You are a strategic intelligence analyst. Generate a competitive intelligence report for: {competitor}
 
 ## Data Collected
 
-### Website Intelligence (Bright Data Web Unlocker)
+### Website Intelligence — source: {label(monitor_data.get('data_source'))}
 - Pricing tiers: {monitor_data.get('pricing_tiers', [])}
 - Product claims: {monitor_data.get('product_claims', [])}
 - Job count: {monitor_data.get('job_count')}
 - Summary: {monitor_data.get('page_summary', '')[:400]}
 
-### Market Signals (Bright Data SERP API)
+### Market Signals — source: {label(search_data.get('data_source'))}
 - Top results about {competitor}:
 {chr(10).join([f"  - {r.get('title', '')}: {r.get('snippet', '')[:150]}" for r in search_data.get('results', [])[:5]])}
 
-### Company Profile (Bright Data Web Scraper API)
+### Company Profile — source: {label(enrich_data.get('data_source'))}
 - Industry: {enrich_data.get('industry')}
 - Size: {enrich_data.get('size_range')}
 - HQ: {enrich_data.get('headquarters')}
@@ -45,10 +49,11 @@ Generate a structured JSON report:
       "title": "section name",
       "content": "detailed analysis",
       "confidence": "high|medium|low",
-      "sources": ["web_unlocker", "serp_api", "web_scraper_api"]
+      "sources": {json.dumps(list(dict.fromkeys(sources_used)))}
     }}
   ],
   "recommended_actions": ["action 1", "action 2", "action 3"]
 }}
 
+In "sources", list only names from that list: they are the sources that really returned data.
 Return ONLY valid JSON, no markdown."""

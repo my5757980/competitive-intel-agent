@@ -1,4 +1,5 @@
 import { scrapeWithUnlocker } from './web-unlocker';
+import { BRIGHT_DATA_WEB_SCRAPER_API, NO_DATA } from './sources';
 
 const BRIGHT_DATA_API_KEY = process.env.BRIGHT_DATA_API_KEY ?? '';
 const SCRAPER_BASE = 'https://api.brightdata.com/datasets/v3';
@@ -11,6 +12,7 @@ export interface CompanyRaw {
   name: string; industry: string | null; size_range: string | null;
   headquarters: string | null; website: string | null;
   recent_news: string[]; tech_signals: string[]; linkedin_followers: number | null;
+  data_source: string; // which service really answered; see ./sources
 }
 
 export async function enrichCompany(company: string): Promise<CompanyRaw> {
@@ -49,7 +51,7 @@ async function enrichViaLinkedIn(url: string): Promise<CompanyRaw> {
 async function enrichViaWebUnlocker(company: string): Promise<CompanyRaw> {
   try {
     const domain = company.replace(/\s+/g, '').toLowerCase();
-    const html = await scrapeWithUnlocker(`https://${domain}.com`);
+    const { html, source } = await scrapeWithUnlocker(`https://${domain}.com`);
     return {
       name: company,
       industry: guessIndustry(html),
@@ -59,6 +61,7 @@ async function enrichViaWebUnlocker(company: string): Promise<CompanyRaw> {
       recent_news: [],
       tech_signals: extractTechSignals(html),
       linkedin_followers: null,
+      data_source: source,
     };
   } catch {
     return emptyProfile(company);
@@ -75,11 +78,12 @@ function parseLinkedIn(item: Record<string, unknown>, url: string): CompanyRaw {
     recent_news: ((item.updates as Record<string, string>[]) ?? []).slice(0, 3).map(p => p.text ?? ''),
     tech_signals: [],
     linkedin_followers: item.followers ? Number(item.followers) : null,
+    data_source: BRIGHT_DATA_WEB_SCRAPER_API,
   };
 }
 
 function emptyProfile(name: string): CompanyRaw {
-  return { name, industry: null, size_range: null, headquarters: null, website: null, recent_news: [], tech_signals: [], linkedin_followers: null };
+  return { name, industry: null, size_range: null, headquarters: null, website: null, recent_news: [], tech_signals: [], linkedin_followers: null, data_source: NO_DATA };
 }
 
 function guessIndustry(html: string): string | null {

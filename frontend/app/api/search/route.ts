@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
     const { query, num_results = 10, date_filter } = await req.json();
     if (!query) return NextResponse.json({ error: 'query is required' }, { status: 422 });
 
-    const raw = await searchSerp(query, num_results, date_filter);
+    const { results: raw, source } = await searchSerp(query, num_results, date_filter);
     const results = raw.filter(r => r.title && r.url);
 
     return NextResponse.json({
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
       results,
       total_results: results.length,
       collected_at: new Date().toISOString(),
-      data_source: 'bright_data_serp_api',
+      data_source: source,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

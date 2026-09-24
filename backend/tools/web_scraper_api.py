@@ -2,6 +2,8 @@ import httpx
 import os
 import re
 
+from tools.sources import BRIGHT_DATA_WEB_SCRAPER_API, NO_DATA
+
 BRIGHT_DATA_API_KEY = os.getenv("BRIGHT_DATA_API_KEY", "")
 SCRAPER_BASE = "https://api.brightdata.com/datasets/v3"
 LINKEDIN_DATASET = "gd_l1vikfnt1wgvvqz95w"
@@ -9,7 +11,8 @@ TIMEOUT = 25.0
 
 
 async def enrich_company(company: str) -> dict:
-    """Fetch structured company profile from Bright Data Web Scraper API."""
+    """Company profile: a LinkedIn URL goes to the Bright Data Web Scraper API, anything else is read from
+    the company's own website. The profile's data_source says which one answered."""
     if _is_linkedin_url(company):
         return await _enrich_via_linkedin(company)
     return await _enrich_via_web_unlocker(company)
@@ -57,7 +60,7 @@ async def _enrich_via_web_unlocker(company: str) -> dict:
 
     search_url = f"https://www.google.com/search?q={company.replace(' ', '+')}+company+site:linkedin.com"
     try:
-        html = await scrape_with_unlocker(f"https://{company.replace(' ', '')}.com")
+        html, source = await scrape_with_unlocker(f"https://{company.replace(' ', '')}.com")
         soup = BeautifulSoup(html, "lxml")
 
         description = ""
@@ -75,6 +78,7 @@ async def _enrich_via_web_unlocker(company: str) -> dict:
             "tech_signals": _extract_tech_signals(html),
             "linkedin_followers": None,
             "description": description,
+            "data_source": source,
         }
     except Exception:
         return _empty_profile(company)
@@ -90,6 +94,7 @@ def _parse_linkedin_profile(item: dict, url: str) -> dict:
         "recent_news": [p.get("text", "") for p in item.get("updates", [])[:3]],
         "tech_signals": [],
         "linkedin_followers": item.get("followers"),
+        "data_source": BRIGHT_DATA_WEB_SCRAPER_API,
     }
 
 
@@ -103,6 +108,7 @@ def _empty_profile(company: str) -> dict:
         "recent_news": [],
         "tech_signals": [],
         "linkedin_followers": None,
+        "data_source": NO_DATA,
     }
 
 

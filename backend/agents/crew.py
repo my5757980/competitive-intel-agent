@@ -8,6 +8,7 @@ from typing import Callable, Awaitable
 from models.requests import MonitorRequest, SearchRequest, EnrichRequest, ReportRequest
 from models.responses import IntelligenceReport, ReportSection, ProgressEvent
 from agents.intel_reporter import get_groq_client, build_reporter_prompt
+from tools.sources import NO_DATA, label
 
 
 ProgressCallback = Callable[[ProgressEvent], Awaitable[None]]
@@ -27,43 +28,53 @@ async def run_full_report(req: ReportRequest, progress_callback: ProgressCallbac
     monitor_data: dict = {}
     search_data: dict = {}
     enrich_data: dict = {}
-    sources_available = 0
+    # One entry per step that really returned data, naming the service that returned it.
+    sources_used: list[str] = []
 
-    await _emit(progress_callback, "CompetitorMonitor", "starting", f"Scanning {req.competitor} website via Bright Data Web Unlocker...")
+    await _emit(progress_callback, "CompetitorMonitor", "starting", f"Scanning {req.competitor} website...")
     try:
         from agents.competitor_monitor import run_competitor_monitor
         monitor_result = await run_competitor_monitor(MonitorRequest(target=req.competitor))
         monitor_data = monitor_result.model_dump()
-        sources_available += 1
+        sources_used.append(monitor_result.data_source)
         await _emit(progress_callback, "CompetitorMonitor", "complete",
-                    f"Found {len(monitor_result.pricing_tiers)} pricing tiers, {len(monitor_result.product_claims)} product claims")
+                    f"Found {len(monitor_result.pricing_tiers)} pricing tiers, {len(monitor_result.product_claims)} product claims"
+                    f" via {label(monitor_result.data_source)}")
     except Exception as e:
         await _emit(progress_callback, "CompetitorMonitor", "failed", f"Scrape failed: {str(e)[:100]}")
 
-    await _emit(progress_callback, "MarketResearcher", "starting", f"Searching market signals via Bright Data SERP API...")
+    await _emit(progress_callback, "MarketResearcher", "starting", "Searching market signals...")
     try:
         from agents.market_researcher import run_market_researcher
         search_result = await run_market_researcher(SearchRequest(query=f"{req.competitor} product launch news 2026", num_results=8))
         search_data = search_result.model_dump()
-        sources_available += 1
-        await _emit(progress_callback, "MarketResearcher", "complete", f"Found {search_result.total_results} market signals")
+        if search_result.results:
+            sources_used.append(search_result.data_source)
+        await _emit(progress_callback, "MarketResearcher", "complete",
+                    f"Found {search_result.total_results} market signals via {label(search_result.data_source)}")
     except Exception as e:
         await _emit(progress_callback, "MarketResearcher", "failed", f"Search failed: {str(e)[:100]}")
 
-    await _emit(progress_callback, "LeadEnricher", "starting", f"Enriching company profile via Bright Data Web Scraper API...")
+    await _emit(progress_callback, "LeadEnricher", "starting", "Enriching company profile...")
     try:
         from agents.lead_enricher import run_lead_enricher
         enrich_result = await run_lead_enricher(EnrichRequest(company=req.competitor))
         enrich_data = enrich_result.model_dump()
-        sources_available += 1
-        await _emit(progress_callback, "LeadEnricher", "complete",
-                    f"Profile built: {enrich_result.industry or 'industry unknown'}, {enrich_result.size_range or 'size unknown'}")
+        if enrich_result.data_source == NO_DATA:
+            message = "No company profile data came back"
+        else:
+            sources_used.append(enrich_result.data_source)
+            message = (f"Profile built: {enrich_result.industry or 'industry unknown'}, "
+                       f"{enrich_result.size_range or 'size unknown'} via {label(enrich_result.data_source)}")
+        await _emit(progress_callback, "LeadEnricher", "complete", message)
     except Exception as e:
         await _emit(progress_callback, "LeadEnricher", "failed", f"Enrichment failed: {str(e)[:100]}")
 
+    sources_available = len(sources_used)
+
     await _emit(progress_callback, "IntelligenceReporter", "starting", "Synthesizing report with Groq llama-3.3-70b...")
     try:
-        prompt = build_reporter_prompt(req.competitor, monitor_data, search_data, enrich_data, req.include_sections)
+        prompt = build_reporter_prompt(req.competitor, monitor_data, search_data, enrich_data, req.include_sections, sources_used)
         client = get_groq_client()
         response = await asyncio.to_thread(
             client.chat.completions.create,
@@ -79,7 +90,8 @@ async def run_full_report(req: ReportRequest, progress_callback: ProgressCallbac
                 title=s.get("title", ""),
                 content=s.get("content", ""),
                 confidence=s.get("confidence", "medium"),
-                sources=s.get("sources", []),
+                # Keep only sources that really returned data, whatever the model wrote.
+                sources=[src for src in s.get("sources", []) if src in sources_used],
             )
             for s in report_json.get("sections", [])
         ]

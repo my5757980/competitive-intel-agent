@@ -1,3 +1,5 @@
+import { BRIGHT_DATA_SERP_API, DUCKDUCKGO } from './sources';
+
 const BRIGHT_DATA_API_KEY = process.env.BRIGHT_DATA_API_KEY ?? '';
 const SERP_BASE = 'https://api.brightdata.com/serp/google';
 
@@ -6,7 +8,10 @@ export interface SerpResult {
   source_date: string | null; relevance_signal: string | null;
 }
 
-export async function searchSerp(query: string, numResults = 10, dateFilter?: string | null): Promise<SerpResult[]> {
+// source says which service really answered: Bright Data SERP API, or the DuckDuckGo fallback.
+export interface SerpAnswer { results: SerpResult[]; source: string; }
+
+export async function searchSerp(query: string, numResults = 10, dateFilter?: string | null): Promise<SerpAnswer> {
   const params = new URLSearchParams({ q: query, num: String(numResults), brd_json: '1' });
   if (dateFilter === 'past_week') params.set('tbs', 'qdr:w');
   if (dateFilter === 'past_month') params.set('tbs', 'qdr:m');
@@ -17,10 +22,10 @@ export async function searchSerp(query: string, numResults = 10, dateFilter?: st
         headers: { 'Authorization': `Bearer ${BRIGHT_DATA_API_KEY}` },
         signal: AbortSignal.timeout(20_000),
       });
-      if (resp.ok) return parseSerpResponse(await resp.json());
+      if (resp.ok) return { results: parseSerpResponse(await resp.json()), source: BRIGHT_DATA_SERP_API };
     } catch {}
   }
-  return searchDuckDuckGo(query, numResults);
+  return { results: await searchDuckDuckGo(query, numResults), source: DUCKDUCKGO };
 }
 
 async function searchDuckDuckGo(query: string, numResults: number): Promise<SerpResult[]> {

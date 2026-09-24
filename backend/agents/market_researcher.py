@@ -6,7 +6,7 @@ from models.responses import SearchResponse, SearchResult
 
 
 async def run_market_researcher(req: SearchRequest) -> SearchResponse:
-    raw_results = await search_serp(req.query, req.num_results, req.date_filter)
+    raw_results, source = await search_serp(req.query, req.num_results, req.date_filter)
 
     search_results = [
         SearchResult(
@@ -25,4 +25,5 @@ async def run_market_researcher(req: SearchRequest) -> SearchResponse:
         results=search_results,
         total_results=len(search_results),
         collected_at=datetime.now(timezone.utc),
+        data_source=source,
     )

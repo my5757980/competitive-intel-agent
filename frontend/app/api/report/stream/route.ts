@@ -3,6 +3,7 @@ import { scrapeWithUnlocker } from '@/lib/tools/web-unlocker';
 import { extractCompetitorIntelligence } from '@/lib/tools/content-extractor';
 import { searchSerp } from '@/lib/tools/serp-api';
 import { enrichCompany } from '@/lib/tools/web-scraper-api';
+import { NO_DATA, sourceLabel } from '@/lib/tools/sources';
 import Groq from 'groq-sdk';
 
 export const maxDuration = 60;
@@ -27,53 +28,60 @@ export async function GET(req: NextRequest) {
 
       const ts = () => new Date().toISOString();
       const startTime = Date.now();
-      let sourcesAvailable = 0;
+      // One entry per step that really returned data, naming the service that returned it.
+      const sourcesUsed: string[] = [];
       let monitorData: Record<string, unknown> = {};
       let searchData: Record<string, unknown> = {};
       let enrichData: Record<string, unknown> = {};
 
       // Agent 1 — CompetitorMonitor
-      emit('progress', { agent: 'CompetitorMonitor', status: 'starting', message: `Scanning ${competitor} website via Bright Data Web Unlocker...`, timestamp: ts() });
+      emit('progress', { agent: 'CompetitorMonitor', status: 'starting', message: `Scanning ${competitor} website...`, timestamp: ts() });
       try {
         const target = competitor.startsWith('http') ? competitor : `https://${competitor.replace(/\s+/g, '').toLowerCase()}.com`;
-        const html = await scrapeWithUnlocker(target);
+        const { html, source } = await scrapeWithUnlocker(target);
         const extracted = extractCompetitorIntelligence(html, target);
         const match = target.match(COMPANY_RE);
         const companyName = match ? match[1].charAt(0).toUpperCase() + match[1].slice(1) : competitor;
-        monitorData = { target_url: target, company_name: companyName, ...extracted };
-        sourcesAvailable++;
-        emit('progress', { agent: 'CompetitorMonitor', status: 'complete', message: `Found ${extracted.pricing_tiers.length} pricing tiers, ${extracted.product_claims.length} product claims`, timestamp: ts() });
+        monitorData = { target_url: target, company_name: companyName, ...extracted, data_source: source };
+        sourcesUsed.push(source);
+        emit('progress', { agent: 'CompetitorMonitor', status: 'complete', message: `Found ${extracted.pricing_tiers.length} pricing tiers, ${extracted.product_claims.length} product claims via ${sourceLabel(source)}`, timestamp: ts() });
       } catch (e) {
         emit('progress', { agent: 'CompetitorMonitor', status: 'failed', message: `Scrape failed: ${String(e).slice(0, 100)}`, timestamp: ts() });
       }
 
       // Agent 2 — MarketResearcher
-      emit('progress', { agent: 'MarketResearcher', status: 'starting', message: 'Searching market signals via Bright Data SERP API...', timestamp: ts() });
+      emit('progress', { agent: 'MarketResearcher', status: 'starting', message: 'Searching market signals...', timestamp: ts() });
       try {
-        const results = await searchSerp(`${competitor} product launch news 2026`, 8);
+        const { results, source } = await searchSerp(`${competitor} product launch news 2026`, 8);
         const filtered = results.filter(r => r.title && r.url);
-        searchData = { query: `${competitor} product launch news 2026`, results: filtered, total_results: filtered.length };
-        sourcesAvailable++;
-        emit('progress', { agent: 'MarketResearcher', status: 'complete', message: `Found ${filtered.length} market signals`, timestamp: ts() });
+        searchData = { query: `${competitor} product launch news 2026`, results: filtered, total_results: filtered.length, data_source: source };
+        if (filtered.length) sourcesUsed.push(source);
+        emit('progress', { agent: 'MarketResearcher', status: 'complete', message: `Found ${filtered.length} market signals via ${sourceLabel(source)}`, timestamp: ts() });
       } catch (e) {
         emit('progress', { agent: 'MarketResearcher', status: 'failed', message: `Search failed: ${String(e).slice(0, 100)}`, timestamp: ts() });
       }
 
       // Agent 3 — LeadEnricher
-      emit('progress', { agent: 'LeadEnricher', status: 'starting', message: 'Enriching company profile via Bright Data Web Scraper API...', timestamp: ts() });
+      emit('progress', { agent: 'LeadEnricher', status: 'starting', message: 'Enriching company profile...', timestamp: ts() });
       try {
         const profile = await enrichCompany(competitor);
         enrichData = profile as unknown as Record<string, unknown>;
-        sourcesAvailable++;
-        emit('progress', { agent: 'LeadEnricher', status: 'complete', message: `Profile built: ${profile.industry ?? 'industry unknown'}, ${profile.size_range ?? 'size unknown'}`, timestamp: ts() });
+        let message = 'No company profile data came back';
+        if (profile.data_source !== NO_DATA) {
+          sourcesUsed.push(profile.data_source);
+          message = `Profile built: ${profile.industry ?? 'industry unknown'}, ${profile.size_range ?? 'size unknown'} via ${sourceLabel(profile.data_source)}`;
+        }
+        emit('progress', { agent: 'LeadEnricher', status: 'complete', message, timestamp: ts() });
       } catch (e) {
         emit('progress', { agent: 'LeadEnricher', status: 'failed', message: `Enrichment failed: ${String(e).slice(0, 100)}`, timestamp: ts() });
       }
 
+      const sourcesAvailable = sourcesUsed.length;
+
       // Agent 4 — IntelligenceReporter
       emit('progress', { agent: 'IntelligenceReporter', status: 'starting', message: 'Synthesizing report with Groq llama-3.3-70b...', timestamp: ts() });
       try {
-        const prompt = buildReporterPrompt(competitor, monitorData, searchData, enrichData, DEFAULT_SECTIONS);
+        const prompt = buildReporterPrompt(competitor, monitorData, searchData, enrichData, DEFAULT_SECTIONS, sourcesUsed);
         const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
         const response = await client.chat.completions.create({
           model: 'llama-3.3-70b-versatile',
@@ -84,7 +92,9 @@ export async function GET(req: NextRequest) {
         const reportJson = JSON.parse(response.choices[0].message.content ?? '{}');
         const sections = (reportJson.sections ?? []).map((s: Record<string, unknown>) => ({
           title: s.title ?? '', content: s.content ?? '',
-          confidence: s.confidence ?? 'medium', sources: s.sources ?? [],
+          confidence: s.confidence ?? 'medium',
+          // Keep only sources that really returned data, whatever the model wrote.
+          sources: (Array.isArray(s.sources) ? s.sources : []).filter((x: unknown) => typeof x === 'string' && sourcesUsed.includes(x)),
         }));
         const report = {
           competitor,
@@ -116,23 +126,23 @@ export async function GET(req: NextRequest) {
   });
 }
 
-function buildReporterPrompt(competitor: string, monitor: Record<string, unknown>, search: Record<string, unknown>, enrich: Record<string, unknown>, sections: string[]): string {
+function buildReporterPrompt(competitor: string, monitor: Record<string, unknown>, search: Record<string, unknown>, enrich: Record<string, unknown>, sections: string[], sourcesUsed: string[]): string {
   const searchResults = ((search.results as Record<string, string>[]) ?? []).slice(0, 5).map(r => `  - ${r.title}: ${String(r.snippet ?? '').slice(0, 150)}`).join('\n');
   return `You are a strategic intelligence analyst. Generate a competitive intelligence report for: ${competitor}
 
 ## Data Collected
 
-### Website Intelligence (Bright Data Web Unlocker)
+### Website Intelligence — source: ${sourceLabel(monitor.data_source)}
 - Pricing tiers: ${JSON.stringify(monitor.pricing_tiers ?? [])}
 - Product claims: ${JSON.stringify(monitor.product_claims ?? [])}
 - Job count: ${monitor.job_count ?? null}
 - Summary: ${String(monitor.page_summary ?? '').slice(0, 400)}
 
-### Market Signals (Bright Data SERP API)
+### Market Signals — source: ${sourceLabel(search.data_source)}
 - Top results about ${competitor}:
 ${searchResults}
 
-### Company Profile (Bright Data Web Scraper API)
+### Company Profile — source: ${sourceLabel(enrich.data_source)}
 - Industry: ${enrich.industry ?? null}
 - Size: ${enrich.size_range ?? null}
 - HQ: ${enrich.headquarters ?? null}
@@ -150,11 +160,12 @@ Generate a structured JSON report:
       "title": "section name",
       "content": "detailed analysis",
       "confidence": "high|medium|low",
-      "sources": ["web_unlocker", "serp_api", "web_scraper_api"]
+      "sources": ${JSON.stringify([...new Set(sourcesUsed)])}
     }
   ],
   "recommended_actions": ["action 1", "action 2", "action 3"]
 }
 
+In "sources", list only names from that list: they are the sources that really returned data.
 Return ONLY valid JSON, no markdown.`;
 }

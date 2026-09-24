@@ -78,6 +78,16 @@ Next.js API routes (/api)          — FastAPI (port 8000) runs the same steps
 - **SERP API** — real-time Google search results in structured JSON
 - **Web Scraper API** — structured company data from LinkedIn and web
 
+## When Bright Data Is Unavailable
+
+With no `BRIGHT_DATA_API_KEY`, or when Bright Data refuses a call, each step falls back so the demo
+still runs, and it says so. Every response's `data_source` names what really served the data:
+`bright_data_web_unlocker`, `bright_data_serp_api` or `bright_data_web_scraper_api`, or the fallbacks
+`direct_fetch` (a plain request to the site) and `duckduckgo`; `none` means nothing came back. The
+report's progress feed, section sources and data-completeness score follow the same rule. The Lead
+Enricher uses the Web Scraper API for LinkedIn company URLs; for a plain company name it reads the
+company's own website through Web Unlocker.
+
 ## Hackathon Submission Checklist
 
 - [x] Public GitHub repository
